@@ -6,7 +6,7 @@
         <h1 class="text-md font-bold">Caphne</h1>
         <p class="text-md font-extralight">Find your perfect studymate</p>
 
-        <template v-if="!isAuthenticated">
+        <div v-if="!isAuthenticated">
           <div class="text-xl leading-relaxed">
             <p class="mt-8">Connect with students</p>
             <p>who understand you.</p>
@@ -29,19 +29,19 @@
               Github
             </Button>
           </div>
-        </template>
+        </div>
 
-        <template v-else>
+        <div v-else>
           <div class="text-xl leading-relaxed">
             <p class="mt-8">Welcome back,</p>
             <p class="font-semibold">{{ user?.username }}!</p>
           </div>
-          <NuxtLink to="/dashboard">
+          <NuxtLink to="/profile">
             <Button class="mt-8 h-8 hover:px-6" variant="default">
-              Go to Dashboard
+              Go to Profile
             </Button>
           </NuxtLink>
-        </template>
+        </div>
       </CardContent>
     </Card>
   </div>
@@ -173,7 +173,7 @@
 
 <script setup lang="ts">
 const { public: { apiBase } } = useRuntimeConfig()
-const { loginWithGoogle, loginWithGitHub, user, isAuthenticated } = useAuth()
+const { loginWithGoogle, loginWithGitHub, authUser: user, isAuthenticated } = useAuth()
 
 function scrollToSignup() {
   document.getElementById('signup')?.scrollIntoView({ behavior: 'smooth' })

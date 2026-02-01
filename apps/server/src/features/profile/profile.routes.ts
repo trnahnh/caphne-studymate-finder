@@ -3,7 +3,9 @@ import { requireAuth } from "../../middleware/requireAuth.js";
 import { db } from "../../db/db.js";
 import { profiles } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
-import type { Profile, User } from "../../db/schema.js";
+import type { User } from "../../db/schema.js";
+import { validateBody } from "../../middleware/typebox.js"
+import { Static, Type } from "typebox";
 
 export const profileRouter = Router()
 
@@ -26,11 +28,23 @@ profileRouter.get('/', requireAuth, async (req, res) => {
   return res.json({ profile: profile || null })
 })
 
-profileRouter.post('/', requireAuth, async (req, res) => {
-  const authUser = req.user as User
-  const { displayName, gender, birthday, year, major, bio, photoUrl, isPublic, goals, vibes, interests } = req.body
+const createProfileSchema = Type.Object({
+  displayName: Type.String(),
+  gender: Type.String(),
+  birthday: Type.String({ format: "date" }),
+  year: Type.String({ minLength: 1, maxLength: 20 }),
+  major: Type.String(),
+  bio: Type.Optional(Type.String({ minLength: 1 })),
+  photoUrl: Type.Optional(Type.String()),
+  isPublic: Type.Optional(Type.Boolean()),
+  goals: Type.Optional(Type.Array(Type.String())),
+  vibes: Type.Optional(Type.Array(Type.String())),
+  interests: Type.Optional(Type.Array(Type.String()))
+})
 
-  // TODO: VALIDATE ON THE LIBRARY PR
+profileRouter.post('/', requireAuth, validateBody(createProfileSchema) , async (req, res) => {
+  const authUser = req.user as User
+  const { displayName, gender, birthday, year, major, bio, photoUrl, isPublic, goals, vibes, interests } = req.body as Static<typeof createProfileSchema>
 
   try {
     await db.insert(profiles).values({
@@ -56,7 +70,9 @@ profileRouter.post('/', requireAuth, async (req, res) => {
   return res.status(201).json({ success: true })
 })
 
-profileRouter.put('/', requireAuth, async (req, res) => {
+const updateProfileSchema = Type.Partial(createProfileSchema);
+
+profileRouter.put('/', requireAuth, validateBody(updateProfileSchema), async (req, res) => {
   const authUser = req.user as User
   const updates = req.body
 

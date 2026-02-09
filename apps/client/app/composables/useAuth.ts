@@ -1,8 +1,5 @@
-import { toast } from "vue-sonner"
-
 interface AuthUser {
   id: number
-  username: string
   email: string
 }
 
@@ -15,7 +12,7 @@ export const useAuth = () => {
 
   const fetchUser = async () => {
     try {
-      const data = await $fetch<{ user: AuthUser }>(`${apiBase}/api/auth/me`, {
+      const data = await $fetch<{ user: AuthUser }>(`${apiBase}/auth/me`, {
         credentials: 'include',
       })
       user.value = data.user
@@ -27,37 +24,23 @@ export const useAuth = () => {
   }
 
   const loginWithGoogle = () => {
-    window.location.href = `${apiBase}/api/auth/google`
+    window.location.href = `${apiBase}/auth/google`
   }
 
   const loginWithGitHub = () => {
-    window.location.href = `${apiBase}/api/auth/github`
-  }
-
-  const updateProfile = async (profileData: { username: string }) => {
-    try {
-      const data = await $fetch<{ user: AuthUser }>(`${apiBase}/api/profile`, {
-        method: 'PUT',
-        body: profileData,
-        credentials: 'include',
-      })
-
-      if (data.user) {
-        user.value = data.user
-      }
-    } catch (error) {
-      toast.error('Error updating profile')
-    }
+    window.location.href = `${apiBase}/auth/github`
   }
 
   const logout = async () => {
     try {
-      await $fetch(`${apiBase}/api/auth/logout`, {
+      await $fetch(`${apiBase}/auth/logout`, {
         method: 'POST',
         credentials: 'include',
       })
     } finally {
       user.value = null
+      const { disconnect } = useSocket()
+      disconnect()
     }
   }
 
@@ -66,7 +49,6 @@ export const useAuth = () => {
     isCheckingAuth,
     isAuthenticated,
     fetchUser,
-    updateProfile,
     logout,
     loginWithGoogle,
     loginWithGitHub,

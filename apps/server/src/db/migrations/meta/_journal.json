@@ -22,6 +22,55 @@
       "when": 1768668109190,
       "tag": "0002_daffy_lightspeed",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1769848916302,
+      "tag": "0003_brown_kid_colt",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1770186322849,
+      "tag": "0004_talented_mister_sinister",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1770187250643,
+      "tag": "0005_quick_lord_tyger",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1770286680759,
+      "tag": "0006_absent_bloodstorm",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1770308074177,
+      "tag": "0007_cuddly_amazoness",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1770312128217,
+      "tag": "0008_abnormal_groot",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1770398573043,
+      "tag": "0009_green_shen",
+      "breakpoints": true
     }
   ]
 }

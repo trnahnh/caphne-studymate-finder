@@ -4,7 +4,7 @@ import { db } from '../../../db/db.js'
 import { users } from '../../../db/schema.js'
 import { env } from '../../../config/env.js'
 
-const CALLBACK_URL = `${env.serverUrl}/api/auth/google/callback`
+const CALLBACK_URL = `${env.serverUrl}/auth/google/callback`
 
 export const googleStrategy = new GoogleStrategy(
   {
@@ -25,7 +25,6 @@ export const googleStrategy = new GoogleStrategy(
 async function findOrCreateUser(profile: Profile, provider: 'google' | 'github') {
   const providerId = profile.id
   const email = profile.emails?.[0]?.value
-  const username = profile.displayName || email?.split('@')[0] || 'user'
 
   if (!email) {
     throw new Error('Email not provided by OAuth provider')
@@ -63,7 +62,6 @@ async function findOrCreateUser(profile: Profile, provider: 'google' | 'github')
   const [newUser] = await db
     .insert(users)
     .values({
-      username,
       email,
       ...(provider === 'google' ? { googleId: providerId } : { githubId: providerId }),
     })

@@ -1,6 +1,22 @@
 <script setup lang="ts">
 import { Toaster } from 'vue-sonner';
 import 'vue-sonner/style.css'
+
+const { isAuthenticated } = useAuth()
+const { internalConnect, internalDisconnect } = useSocket()
+const { attachListeners, requestBrowserPermission } = useChatNotifications()
+
+onMounted(() => {
+  if (isAuthenticated.value) {
+    internalConnect()
+    attachListeners()
+    requestBrowserPermission()
+  }
+})
+
+onUnmounted(() => {
+  internalDisconnect()
+})
 </script>
 
 <template>

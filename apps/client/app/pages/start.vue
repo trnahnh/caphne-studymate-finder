@@ -36,6 +36,7 @@ import {
   CardContent,
 } from '@/components/ui/card'
 import { goalOptions, interestCategories, majorOptions, vibeOptions, yearOptions } from '~/data/startOptions'
+import { toast } from 'vue-sonner'
 
 definePageMeta({ layout: "internal", middleware: "auth" })
 
@@ -57,7 +58,6 @@ const df = new DateFormatter('en-GB', {
 const displayName = ref('')
 const selectedYear = ref('')
 const selectedMajor = ref('')
-
 const selectedGoals = ref<string[]>([])
 const selectedVibes = ref<string[]>([])
 
@@ -102,6 +102,7 @@ const removeCustomTag = (tag: string) => {
   selectedInterests.value = selectedInterests.value.filter(i => i !== tag)
 }
 
+const photoUrl = ref('')
 const bio = ref('')
 const bioMaxLength = 200
 const bioLength = computed(() => bio.value.length)
@@ -120,6 +121,31 @@ const canProceedScreen3 = computed(() =>
 )
 const canProceedScreen4 = computed(() => selectedInterests.value.length > 0)
 
+const validatePhotoUrl = async (enteredUrl: string) => {
+  if (!enteredUrl.trim()) {
+    return true
+  }
+
+  try {
+    new URL(enteredUrl)
+  } catch {
+    return false
+  }
+
+  const img = new Image()
+  const isValid = await new Promise((resolve) => {
+    img.onload = () => resolve(true)
+    img.onerror = () => resolve(false)
+    img.src = enteredUrl
+  })
+
+  if (!isValid) {
+    return false
+  }
+
+  return true
+}
+
 const { public: { apiBase } } = useRuntimeConfig()
 
 const submitProfile = async () => {
@@ -135,8 +161,8 @@ const submitProfile = async () => {
         birthday,
         year: selectedYear.value,
         major: selectedMajor.value,
-        bio: bio.value || '',
-        photoUrl: null,
+        bio: bio.value.trim() || '',
+        photoUrl: photoUrl.value.trim() || authUser.value?.oauthPhotoUrl,
         isPublic: showPublicProfile.value,
         goals: selectedGoals.value,
         vibes: selectedVibes.value,
@@ -172,6 +198,15 @@ const onNext = async () => {
   if (!canProceedCurrentScreen.value) {
     return
   }
+
+  if (currentQuestion.value === 5) {
+    const isValid = await validatePhotoUrl(photoUrl.value)
+    if (!isValid) {
+      photoUrl.value = ''
+      toast.error('Could not load image from this URL')
+    }
+  }
+
   if (currentQuestion.value === totalQuestion) {
     isLoading.value = true
     await submitProfile()
@@ -190,6 +225,14 @@ const onPrevious = () => {
     currentQuestion.value--
   }
 }
+
+const { authUser, fetchUser } = useAuth()
+
+
+onMounted(async () => {
+  await fetchUser()
+})
+
 </script>
 
 <template>
@@ -210,20 +253,17 @@ const onPrevious = () => {
         <Label class="text-sm text-muted-foreground mb-3 block">Your gender</Label>
         <div class="flex gap-3">
           <Button :variant="selectedGender === 'male' ? 'default' : 'outline'"
-            class="flex-1 h-16 flex-col gap-1 size-18"
-            @click="selectedGender = 'male'">
+            class="flex-1 h-16 flex-col gap-1 size-18" @click="selectedGender = 'male'">
             <Icon name="streamline-pixel:user-gender-male" size="28" />
             <span class="text-xs">Male</span>
           </Button>
           <Button :variant="selectedGender === 'female' ? 'default' : 'outline'"
-            class="flex-1 h-16 flex-col gap-1 size-18"
-            @click="selectedGender = 'female'">
+            class="flex-1 h-16 flex-col gap-1 size-18" @click="selectedGender = 'female'">
             <Icon name="streamline-pixel:user-gender-female" size="28" />
             <span class="text-xs">Female</span>
           </Button>
           <Button :variant="selectedGender === 'other' ? 'default' : 'outline'"
-            class="flex-1 h-16 flex-col gap-1 size-18"
-            @click="selectedGender = 'other'">
+            class="flex-1 h-16 flex-col gap-1 size-18" @click="selectedGender = 'other'">
             <Icon name="streamline-pixel:interface-essential-question-help-square" size="28" />
             <span class="text-xs">Other</span>
           </Button>
@@ -315,7 +355,8 @@ const onPrevious = () => {
       <div class="w-full mb-8">
         <Label class="text-sm text-muted-foreground mb-3 block">Goals</Label>
         <div class="grid grid-cols-2 gap-3">
-          <Button v-for="goal in goalOptions" :key="goal.id" :variant="selectedGoals.includes(goal.id) ? 'default' : 'outline'"
+          <Button v-for="goal in goalOptions" :key="goal.id"
+            :variant="selectedGoals.includes(goal.id) ? 'default' : 'outline'"
             class="h-auto py-4 px-4 items-center gap-2 text-center" @click="toggleGoal(goal.id)">
             <span class="text-sm">{{ goal.label }}</span>
           </Button>
@@ -362,7 +403,8 @@ const onPrevious = () => {
               <div class="flex flex-wrap gap-2 pt-2">
                 <Badge v-for="option in category.options" :key="option"
                   :variant="selectedInterests.includes(option) ? 'default' : 'outline'"
-                  class="cursor-pointer px-3 py-1.5 text-sm transition-all hover:scale-105" @click="toggleInterest(option)">
+                  class="cursor-pointer px-3 py-1.5 text-sm transition-all hover:scale-105"
+                  @click="toggleInterest(option)">
                   {{ option }}
                 </Badge>
               </div>
@@ -403,17 +445,14 @@ const onPrevious = () => {
 
       <!-- Profile Photo -->
       <div class="w-full mb-8">
-        <Label class="text-sm text-muted-foreground mb-3 block">Profile photo</Label>
-        <div class="flex justify-center">
-          <Card class="border-dashed border-2 hover:border-primary/50 transition-colors cursor-pointer">
-            <CardContent class="flex flex-col items-center justify-center p-8">
-              <div class="w-20 h-20 rounded-full bg-muted flex items-center justify-center mb-3">
-                <Icon name="streamline-pixel:user-profile-focus" size="40" class="text-muted-foreground" />
-              </div>
-              <span class="text-sm text-muted-foreground">Click to upload</span>
-            </CardContent>
-          </Card>
+        <div class="flex justify-center items-center">
+          <div class="size-20 rounded-full mb-5 overflow-hidden">
+            <img v-if="authUser?.oauthPhotoUrl" :src="authUser.oauthPhotoUrl" class="w-full h-full object-cover">
+            <Icon v-else name="material-symbols:person-heart" size="40" class="text-muted-foreground" />
+          </div>
         </div>
+        <Label class="text-sm text-muted-foreground mb-3">Link to your profile picture</Label>
+        <Textarea v-model="photoUrl" class="min-w-xs w-xs" placeholder="https://my.profile/aBCDeXe123" />
       </div>
 
       <!-- Bio -->
@@ -425,7 +464,7 @@ const onPrevious = () => {
           </span>
         </div>
         <Textarea v-model="bio" placeholder="I'm into late night study sessions. LF study buddies..." :rows="4"
-          :maxlength="bioMaxLength" class="resize-none" />
+          :maxlength="bioMaxLength" class="resize-none min-w-xs w-xs" />
       </div>
     </div>
 

@@ -1,6 +1,7 @@
 interface AuthUser {
   id: number
   email: string
+  oauthPhotoUrl: string
 }
 
 const user = ref<AuthUser | null>(null)
@@ -39,8 +40,8 @@ export const useAuth = () => {
       })
     } finally {
       user.value = null
-      const { disconnect } = useSocket()
-      disconnect()
+      const { internalDisconnect } = useSocket()
+      internalDisconnect()
     }
   }
 

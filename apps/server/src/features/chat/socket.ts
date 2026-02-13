@@ -4,8 +4,19 @@ import { parse as parseCookie } from 'cookie'
 import { verifyToken } from '../auth/jwt.service.js'
 import { verifyMatchParticipant, createMessage, markMessagesRead } from './chat.services.js'
 import { env } from '../../config/env.js'
+import { db } from '../../db/db.js'
+import { users } from '../../db/schema.js'
+import { eq } from 'drizzle-orm'
 
 let ioInstance: SocketIOServer | null = null
+
+// Maps userId to Set of socket IDs for online tracking
+const onlineUsers = new Map<number, Set<string>>()
+
+export function userIsOnline(userId: number) {
+  const sockets = onlineUsers.get(userId)
+  return sockets ? sockets.size > 0 : false
+}
 
 export function getIO(): SocketIOServer {
   if (!ioInstance) throw new Error('Socket.IO not initialized')
@@ -45,6 +56,10 @@ export function setupSocketIO(httpServer: HttpServer) {
     const userId: number = socket.data.userId
 
     socket.join(`user:${userId}`)
+
+    const sockets = onlineUsers.get(userId) ?? new Set()
+    sockets.add(socket.id)
+    onlineUsers.set(userId, sockets)
 
     socket.on('join', async (matchId: number) => {
       if (typeof matchId !== 'number' || isNaN(matchId)) {
@@ -109,6 +124,21 @@ export function setupSocketIO(httpServer: HttpServer) {
         content: trimmed,
         createdAt: message.createdAt,
       })
+    })
+
+    socket.on('disconnect', () => {
+      const sockets = onlineUsers.get(userId)
+      if (sockets) {
+        sockets.delete(socket.id)
+
+        if (sockets.size === 0) {
+          onlineUsers.delete(userId)
+          db.update(users)
+            .set({ lastActiveAt: new Date() })
+            .where(eq(users.id, userId))
+            .catch((err) => console.error('Failed to update lastActiveAt:', err))
+        }
+      }
     })
   })
 

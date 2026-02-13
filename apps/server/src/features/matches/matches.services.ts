@@ -2,6 +2,7 @@ import { matchConfig } from "../../config/matching.js"
 import { db } from "../../db/db.js"
 import { matches, users, profiles } from "../../db/schema.js"
 import { and, desc, eq, gte, ne, notInArray, sql } from 'drizzle-orm'
+import { userIsOnline } from '../chat/socket.js'
 
 const getAdminId = async () => {
   const [admin] = await db
@@ -97,11 +98,13 @@ export const getAllMatches = async (userId: number) => {
   const initiated = await db
     .select({
       matchId: matches.id,
+      matchedUserId: users.id,
       displayName: profiles.displayName,
       major: profiles.major,
       year: profiles.year,
       photoUrl: profiles.photoUrl,
       matchedAt: matches.createdAt,
+      lastActiveAt: users.lastActiveAt,
     })
     .from(matches)
     .innerJoin(users, eq(matches.matchedUserId, users.id))
@@ -111,11 +114,13 @@ export const getAllMatches = async (userId: number) => {
   const received = await db
     .select({
       matchId: matches.id,
+      matchedUserId: users.id,
       displayName: profiles.displayName,
       major: profiles.major,
       year: profiles.year,
       photoUrl: profiles.photoUrl,
       matchedAt: matches.createdAt,
+      lastActiveAt: users.lastActiveAt,
     })
     .from(matches)
     .innerJoin(users, eq(matches.userId, users.id))
@@ -130,6 +135,10 @@ export const getAllMatches = async (userId: number) => {
       seen.add(m.matchId)
       return true
     })
+    .map(({ matchedUserId, ...rest }) => ({
+      ...rest,
+      isOnline: userIsOnline(matchedUserId)
+    }))
 
   const adminId = await getAdminId()
   const now = Date.now()

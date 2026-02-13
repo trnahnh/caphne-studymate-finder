@@ -4,7 +4,7 @@
       <Icon name="svg-spinners:ring-resize" size="40" class="text-primary" />
     </div>
 
-    <Card v-else class="w-full max-w-xs flex flex-col p-2 h-[42vh]">
+    <Card v-else class="w-full max-w-xs flex flex-col p-2 h-[42vh] min-h-80">
       <CardContent class="flex flex-col h-full p-0">
         <!-- Header -->
         <div class="flex items-center p-4 justify-between border-b border-border">
@@ -33,15 +33,19 @@
 
             <NuxtLink v-for="match in matches" :key="match.matchId" :to="`/chat/${match.matchId}`"
               class="flex items-center gap-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors cursor-pointer">
-              <div class="size-10 rounded-xl bg-background flex items-center justify-center shrink-0">
-                <img v-if="match.photoUrl" :src="match.photoUrl" class="size-10 rounded-xl object-cover" />
-                <Icon v-else name="mdi:account" size="24" />
+              <div class="relative shrink-0">
+                <div class="size-10 rounded-xl bg-background flex items-center justify-center overflow-hidden">
+                  <img v-if="match.photoUrl" :src="match.photoUrl" class="size-10 rounded-xl object-cover" />
+                  <Icon v-else name="mdi:account" size="24" />
+                </div>
+                <span
+                  class="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-muted"
+                  :class="match.isOnline ? 'bg-green-500' : 'bg-slate-500'" />
               </div>
               <div class="overflow-hidden flex-1">
                 <p class="text-sm font-semibold truncate">{{ match.displayName }}</p>
                 <p class="text-xs text-muted-foreground truncate">{{ match.major }} · {{ match.year }}</p>
               </div>
-              <!-- Unread count badge -->
               <Badge v-if="getUnreadCount(match.matchId) > 0"
                 class="size-5 p-0 text-[10px] flex items-center justify-center shrink-0">
                 {{ getUnreadCount(match.matchId) }}
@@ -86,6 +90,8 @@ interface MatchCard {
   year: string
   photoUrl: string | null
   matchedAt: string
+  isOnline: boolean
+  lastActiveAt: string | null
 }
 
 const matches = ref<MatchCard[]>([])

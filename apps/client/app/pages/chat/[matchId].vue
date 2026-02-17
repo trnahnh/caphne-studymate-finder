@@ -1,19 +1,15 @@
 <template>
   <div class="flex justify-center items-center min-h-screen">
-    <div v-if="isLoading" class="flex flex-col items-center">
-      <Icon name="svg-spinners:ring-resize" size="40" class="text-primary" />
-    </div>
-
-    <Card v-else class="w-full max-w-xs flex flex-col py-0 h-[50vh] min-h-96">
+    <Card class="w-full max-w-xs flex flex-col h-[45vh] min-h-96 p-2">
       <CardContent class="flex flex-col h-full p-0">
         <!-- Header -->
-        <div class="flex items-center gap-2 p-3 border-b border-border">
+        <div class="flex items-center gap-2 border-b border-border py-2 pl-2">
           <NuxtLink to="/matches">
             <Button variant="ghost" size="sm" class="size-8 p-0">
               <Icon name="mdi:arrow-left" size="20" />
             </Button>
           </NuxtLink>
-          <!-- Wrapped name in div, added status line -->
+          <!-- Status line -->
           <div class="min-w-0">
             <p class="text-sm font-semibold truncate">{{ matchDisplayName }}</p>
             <p v-if="isMatchOnline" class="text-[11px] text-green-500">Online</p>
@@ -24,7 +20,10 @@
         </div>
 
         <!-- Messages -->
-        <ScrollArea ref="scrollAreaRef" class="flex-1 min-h-0">
+        <div v-if="isLoading" class="flex items-center justify-center h-full">
+          <Icon name="svg-spinners:ring-resize" size="40" class="text-primary" />
+        </div>
+        <ScrollArea v-else ref="scrollAreaRef" class="flex-1 min-h-0">
           <div class="p-4 space-y-2">
             <Button v-if="hasMore" variant="ghost" size="sm" class="w-full text-xs text-muted-foreground"
               :disabled="isLoadingMore" @click="loadMore">
@@ -51,7 +50,7 @@
 
         <!-- Input -->
         <div class="p-4 border-t border-border">
-          <form @submit.prevent="sendMessage" class="flex gap-2 h-full">
+          <form @submit.prevent="handleSend" class="flex gap-2 h-full">
             <Input v-model="newMessage" placeholder="Type a message..." class="flex-1" :disabled="!isConnected" />
             <Button type="submit" size="sm" class="h-full" :disabled="!canSend">
               <Icon name="mingcute:send-fill" size="18" />
@@ -66,6 +65,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import type { ChatMessage } from '~/types/chat'
 
 definePageMeta({
   middleware: 'auth',
@@ -75,40 +75,19 @@ definePageMeta({
 const route = useRoute()
 const { public: { apiBase } } = useRuntimeConfig()
 const { authUser } = useAuth()
-const { getSocket } = useSocket()
-const { clearUnread } = useChatNotifications()
 
 const matchId = Number(route.params.matchId)
 const currentUserId = computed(() => authUser.value?.id)
-
-interface ChatMessage {
-  id: number
-  matchId: number
-  senderId: number
-  content: string
-  createdAt: string
-  readAt: string | null
-}
 
 const messages = ref<ChatMessage[]>([])
 const matchDisplayName = ref('')
 const newMessage = ref('')
 const isLoading = ref(true)
 const isLoadingMore = ref(false)
-const isConnected = ref(false)
 const hasMore = ref(true)
 const scrollAreaRef = ref<InstanceType<typeof ScrollArea> | null>(null)
 const isMatchOnline = ref(false)
 const matchLastActiveAt = ref<string | null>(null)
-
-const canSend = computed(() =>
-  isConnected.value && newMessage.value.trim().length > 0
-)
-
-const formatTime = (dateStr: string) => {
-  const d = new Date(dateStr)
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
 
 const scrollToBottom = () => {
   nextTick(() => {
@@ -117,6 +96,19 @@ const scrollToBottom = () => {
       viewport.scrollTop = viewport.scrollHeight
     }
   })
+}
+
+const { isConnected, setupListeners, sendMessage, cleanup } = useChatSocket(
+  matchId, messages, currentUserId, scrollToBottom,
+)
+
+const canSend = computed(() =>
+  isConnected.value && newMessage.value.trim().length > 0
+)
+
+const formatTime = (dateStr: string) => {
+  const d = new Date(dateStr)
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 const PAGE_SIZE = 50
@@ -147,14 +139,10 @@ const loadMore = async () => {
   }
 }
 
-const sendMessage = () => {
+const handleSend = () => {
   const content = newMessage.value.trim()
   if (!content) return
-
-  const socket = getSocket()
-  if (!socket) return
-
-  socket.emit('send_message', { matchId, content })
+  sendMessage(content)
   newMessage.value = ''
 }
 
@@ -177,42 +165,10 @@ onMounted(async () => {
     const initialMessages = await fetchMessages()
     messages.value = initialMessages
     if (initialMessages.length < PAGE_SIZE) hasMore.value = false
+    isLoading.value = false
     scrollToBottom()
 
-    const socket = getSocket()
-    if (!socket) return
-
-    socket.on('connect', () => {
-      isConnected.value = true
-      socket.emit('join', matchId)
-      socket.emit('mark_read', matchId)
-    })
-
-    if (socket.connected) {
-      isConnected.value = true
-      socket.emit('join', matchId)
-    }
-
-    socket.emit('mark_read', matchId)
-    clearUnread(matchId)
-
-    socket.on('new_message_from_match', (msg: ChatMessage) => {
-      messages.value.push(msg)
-      scrollToBottom()
-      if (msg.senderId !== currentUserId.value) {
-        socket.emit('mark_read', matchId)
-      }
-    })
-
-    socket.on('error', (err: { message: string }) => {
-      toast.error(err.message)
-    })
-
-    socket.on('disconnect', () => {
-      isConnected.value = false
-    })
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
+    setupListeners()
   } catch (e) {
     console.error('Failed to initialize chat:', e)
     toast.error('Failed to load chat')
@@ -222,21 +178,7 @@ onMounted(async () => {
   }
 })
 
-const handleVisibilityChange = () => {
-  if (!document.hidden) {
-    const s = getSocket()
-    if (s) s.emit('mark_read', matchId)
-  }
-}
-
 onUnmounted(() => {
-  const socket = getSocket()
-  if (socket) {
-    socket.emit('leave', matchId)
-    socket.off('new_message_from_match')
-    socket.off('error')
-    socket.off('connect')
-    socket.off('disconnect')
-  }
+  cleanup()
 })
 </script>

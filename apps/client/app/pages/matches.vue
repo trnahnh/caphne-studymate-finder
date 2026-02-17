@@ -1,19 +1,16 @@
 <template>
   <div class="flex justify-center items-center min-h-screen">
-    <div v-if="isLoading" class="flex flex-col items-center">
-      <Icon name="svg-spinners:ring-resize" size="40" class="text-primary" />
-    </div>
-
-    <Card v-else class="w-full max-w-xs flex flex-col p-2 h-[42vh] min-h-80">
+    <Card class="w-full max-w-xs flex flex-col p-2 h-[45vh] min-h-80">
       <CardContent class="flex flex-col h-full p-0">
         <!-- Header -->
         <div class="flex items-center p-4 justify-between border-b border-border">
           <div class="flex items-center gap-3 min-w-0">
-            <div class="size-15 rounded-full bg-muted flex items-center justify-center overflow-hidden border-2 border-accent shrink-0">
+            <div
+              class="size-15 rounded-full bg-muted flex items-center justify-center overflow-hidden border-2 border-accent shrink-0">
               <img v-if="profile?.photoUrl" :src="profile?.photoUrl" class="w-full h-full object-cover">
               <Icon v-else name="material-symbols:person-heart-rounded" size="32" />
             </div>
-            <h1 class="text-lg font-bold truncate">{{ profile.displayName }}</h1>
+            <h1 class="text-lg font-bold truncate">{{ profile?.displayName }}</h1>
           </div>
           <Button variant="outline" class="h-7 text-xs shrink-0" :disabled="!canGenerate || isGenerating"
             @click="handleGenerate">
@@ -25,21 +22,23 @@
         </div>
 
         <!-- Matches List -->
-        <ScrollArea class="flex-1 min-h-0">
-          <div class="p-4 space-y-3">
+        <div v-if="isLoading" class="flex items-center justify-center h-full">
+          <Icon name="svg-spinners:ring-resize" size="40" class="text-primary" />
+        </div>
+        <ScrollArea v-else class="flex-1 min-h-0">
+          <div class="p-3 space-y-3">
             <p v-if="matches.length === 0" class="text-muted-foreground text-sm text-center py-4">
               No matches yet...
             </p>
 
             <NuxtLink v-for="match in matches" :key="match.matchId" :to="`/chat/${match.matchId}`"
-              class="flex items-center gap-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors cursor-pointer">
+              class="flex items-center gap-3 rounded-full bg-muted hover:bg-muted/80 transition-colors cursor-pointer p-2">
               <div class="relative shrink-0">
-                <div class="size-10 rounded-xl bg-background flex items-center justify-center overflow-hidden">
-                  <img v-if="match.photoUrl" :src="match.photoUrl" class="size-10 rounded-xl object-cover" />
+                <div class="size-10 rounded-full bg-background flex items-center justify-center overflow-hidden">
+                  <img v-if="match.photoUrl" :src="match.photoUrl" class="size-10 object-cover" />
                   <Icon v-else name="mdi:account" size="24" />
                 </div>
-                <span
-                  class="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-muted"
+                <span class="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-muted"
                   :class="match.isOnline ? 'bg-green-500' : 'bg-slate-500'" />
               </div>
               <div class="overflow-hidden flex-1">
@@ -47,7 +46,7 @@
                 <p class="text-xs text-muted-foreground truncate">{{ match.major }} · {{ match.year }}</p>
               </div>
               <Badge v-if="getUnreadCount(match.matchId) > 0"
-                class="size-5 p-0 text-[10px] flex items-center justify-center shrink-0">
+                class="size-6 p-0 text-[10px] flex items-center justify-center shrink-0">
                 {{ getUnreadCount(match.matchId) }}
               </Badge>
             </NuxtLink>
@@ -72,6 +71,7 @@
 import { toast } from 'vue-sonner'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '~/components/ui/badge'
+import { SocketEvents } from '@caphne/shared/socket-events'
 
 definePageMeta({
   middleware: 'auth',
@@ -79,9 +79,10 @@ definePageMeta({
 })
 
 const { getSocket } = useSocket()
-const { fetchUnreadCounts, getUnreadCount } = useChatNotifications()
+const { getUnreadCount, initUnreadCounts } = useChatNotifications()
 
 const { public: { apiBase } } = useRuntimeConfig()
+const { profile, fetchProfile } = useProfile()
 
 interface MatchCard {
   matchId: number
@@ -90,6 +91,7 @@ interface MatchCard {
   year: string
   photoUrl: string | null
   matchedAt: string
+  unreadCount: number
   isOnline: boolean
   lastActiveAt: string | null
 }
@@ -98,9 +100,6 @@ const matches = ref<MatchCard[]>([])
 const nextMatchAt = ref<Date | null>(null)
 const isLoading = ref(true)
 const isGenerating = ref(false)
-const profile = ref<any>(null)
-
-
 const canGenerate = computed(() => {
   if (!nextMatchAt.value) return true
   return new Date(nextMatchAt.value).getTime() <= Date.now()
@@ -144,30 +143,13 @@ const fetchMatches = async () => {
 }
 
 onMounted(async () => {
-  try {
-    await fetchMatches()
-    const data = await $fetch<{ profile: any }>(`${apiBase}/profile`, {
-      credentials: 'include',
-    })
-
-    if (!data.profile) {
-      navigateTo('/start')
-      return
-    }
-
-    profile.value = data.profile
-  } catch (e) {
-    console.error('Failed to fetch profile:', e)
-    navigateTo('/start')
-  } finally {
-    isLoading.value = false
-  }
-
-  await fetchUnreadCounts()
+  await Promise.all([fetchMatches(), fetchProfile()])
+  initUnreadCounts(matches.value)
+  isLoading.value = false
 
   const socket = getSocket()
   if (socket) {
-    socket.on('has_new_message', (data: { matchId: number }) => {
+    socket.on(SocketEvents.USER_HAS_NEW_MESSAGE, (data: { matchId: number }) => {
       const idx = matches.value.findIndex(m => m.matchId === data.matchId)
       if (idx > 0) {
         const [match] = matches.value.splice(idx, 1)

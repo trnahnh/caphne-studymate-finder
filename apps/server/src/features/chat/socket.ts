@@ -7,6 +7,7 @@ import { env } from '../../config/env.js'
 import { db } from '../../db/db.js'
 import { users } from '../../db/schema.js'
 import { eq } from 'drizzle-orm'
+import { SocketEvents } from '@caphne/shared/socket-events'
 
 let ioInstance: SocketIOServer | null = null
 
@@ -54,70 +55,70 @@ export function setupSocketIO(httpServer: HttpServer) {
 
   io.on('connection', (socket) => {
     const userId: number = socket.data.userId
-
+ 
     socket.join(`user:${userId}`)
 
     const sockets = onlineUsers.get(userId) ?? new Set()
     sockets.add(socket.id)
     onlineUsers.set(userId, sockets)
 
-    socket.on('join', async (matchId: number) => {
+    socket.on(SocketEvents.USER_JOINS_MATCH_ROOM, async (matchId: number) => {
       if (typeof matchId !== 'number' || isNaN(matchId)) {
-        socket.emit('error', { message: 'Invalid match ID' })
+        socket.emit(SocketEvents.ERROR, { message: 'Invalid match ID' })
         return
       }
 
       const match = await verifyMatchParticipant(matchId, userId)
       if (!match) {
-        socket.emit('error', { message: 'Not authorized for this chat' })
+        socket.emit(SocketEvents.ERROR, { message: 'Not authorized for this chat' })
         return
       }
 
       socket.join(`match:${matchId}`)
     })
 
-    socket.on('leave', (matchId: number) => {
+    socket.on(SocketEvents.USER_LEAVES_MATCH_ROOM, (matchId: number) => {
       if (typeof matchId !== 'number') return
       socket.leave(`match:${matchId}`)
     })
 
-    socket.on('mark_read', async (matchId: number) => {
+    socket.on(SocketEvents.USER_MARKS_READ, async (matchId: number) => {
       if (typeof matchId !== 'number') return
       const match = await verifyMatchParticipant(matchId, userId)
       if (!match) return
-      
+
       const readCount = await markMessagesRead(matchId, userId)
       if (readCount > 0) {
         const senderId = match.userId === userId ? match.matchedUserId : match.userId
-        io.to(`user:${senderId}`).emit('messages_read', { matchId })
+        io.to(`user:${senderId}`).emit(SocketEvents.MESSAGES_ARE_READ, { matchId })
       }
     })
 
-    socket.on('send_message', async (data: { matchId: number; content: string }) => {
+    socket.on(SocketEvents.USER_SENDS_MESSAGE, async (data: { matchId: number; content: string }) => {
       const { matchId, content } = data
 
       if (typeof matchId !== 'number' || typeof content !== 'string') {
-        socket.emit('error', { message: 'Invalid message data' })
+        socket.emit(SocketEvents.ERROR, { message: 'Invalid message data' })
         return
       }
 
       const trimmed = content.trim()
       if (!trimmed || trimmed.length > 2000) {
-        socket.emit('error', { message: 'Message must be 1-2000 characters' })
+        socket.emit(SocketEvents.ERROR, { message: 'Message must be 1-2000 characters' })
         return
       }
 
       const match = await verifyMatchParticipant(matchId, userId)
       if (!match) {
-        socket.emit('error', { message: 'Not authorized for this chat' })
+        socket.emit(SocketEvents.ERROR, { message: 'Not authorized for this chat' })
         return
       }
 
       const message = await createMessage(matchId, userId, trimmed)
-      io.to(`match:${matchId}`).emit('new_message_from_match', message)
+      io.to(`match:${matchId}`).emit(SocketEvents.MATCH_ROOM_HAS_NEW_MESSAGE, message)
 
       const recipientId = match.userId === userId ? match.matchedUserId : match.userId
-      io.to(`user:${recipientId}`).emit('has_new_message', {
+      io.to(`user:${recipientId}`).emit(SocketEvents.USER_HAS_NEW_MESSAGE, {
         matchId,
         messageId: message.id,
         senderId: userId,

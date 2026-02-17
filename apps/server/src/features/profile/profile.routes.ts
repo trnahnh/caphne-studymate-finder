@@ -25,7 +25,7 @@ profileRouter.get('/', requireAuth, async (req, res) => {
   }
 
   console.log(`User with ID ${authUser.id} fetched profile`)
-  return res.json({ profile: profile || null })
+  return res.json(profile || null)
 })
 
 const createProfileSchema = Type.Object({
@@ -46,8 +46,9 @@ profileRouter.post('/', requireAuth, validateBody(createProfileSchema), async (r
   const authUser = req.user as User
   const { displayName, gender, birthday, year, major, bio, photoUrl, isPublic, goals, vibes, interests } = req.body as Static<typeof createProfileSchema>
 
+  let created
   try {
-    await db.insert(profiles).values({
+    [created] = await db.insert(profiles).values({
       userId: authUser.id,
       displayName,
       gender,
@@ -60,18 +61,18 @@ profileRouter.post('/', requireAuth, validateBody(createProfileSchema), async (r
       goals,
       vibes,
       interests,
-    })
+    }).returning()
   } catch (e) {
     if (e instanceof Error && 'code' in e || (e as any).code === '23505') {
       console.error(`Duplicate Error creating profile for user ID ${authUser.id}:`, e)
       return res.status(409).json({ message: 'Profile already exist' })
     }
     console.error(`Error creating profile for user ID ${authUser.id}:`, e)
-    return res.status(500).json({ message: 'Something went wrong' })
+    return res.status(500).json({ created: created })
   }
 
   console.log(`User with ID ${authUser.id} added profile`)
-  return res.status(201).json({ success: true })
+  return res.status(201).json(created)
 })
 
 const updateProfileSchema = Type.Partial(createProfileSchema);
@@ -97,5 +98,5 @@ profileRouter.put('/', requireAuth, validateBody(updateProfileSchema), async (re
   }
 
   console.log(`User with ID ${authUser.id} updated profile`)
-  return res.json({ profile: updated[0] })
+  return res.json(updated[0])
 })
